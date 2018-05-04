@@ -4,6 +4,8 @@ var beautifyHtml = require('js-beautify').html;
 var chalk = require('chalk');
 var fs = require('fs');
 var globby = require('globby');
+var Twig = require('twig');
+var twig = Twig.twig;
 var Handlebars = require('handlebars');
 var inflect = require('i')();
 var matter = require('gray-matter');
@@ -88,12 +90,6 @@ var defaults = {
 	 * @type {String}
 	 */
   extension: '.html',
-
-	/**
-	 * Custom dest map
-	 * @type {Object}
-	 */
-  destMap: {},
 
 	/**
 	 * beautifier options
@@ -532,25 +528,8 @@ var parseViews = function () {
  */
 var registerHelpers = function () {
 
-	// get helper files
-	var resolveHelper = path.join.bind(null, __dirname, 'helpers');
-	var localHelpers = fs.readdirSync(resolveHelper());
-	var userHelpers = options.helpers;
-
-	// register local helpers
-	localHelpers.map(function (helper) {
-		var key = helper.match(/(^\w+?-)(.+)(\.\w+)/)[2];
-		var path = resolveHelper(helper);
-		Handlebars.registerHelper(key, require(path));
-	});
-
-
-	// register user helpers
-	for (var helper in userHelpers) {
-		if (userHelpers.hasOwnProperty(helper)) {
-			Handlebars.registerHelper(helper, userHelpers[helper]);
-		}
-	}
+	registerFunctions(options.functions);
+	registerFilters(options.filters);
 
 
 	/**
@@ -565,31 +544,78 @@ var registerHelpers = function () {
 	 * @example
 	 * {{material name context}}
 	 */
-	Handlebars.registerHelper(inflect.singularize(options.keys.materials), function (name, context, opts) {
+	// Handlebars.registerHelper(, function (name, context, opts) {
 
-		// remove leading numbers from name keyword
-		// partials are always registered with the leading numbers removed
-		// This is for both the subCollection as the file(name) itself!
+	// 	// remove leading numbers from name keyword
+	// 	// partials are always registered with the leading numbers removed
+	// 	// This is for both the subCollection as the file(name) itself!
+	// 	var key = name.replace(/(\d+[\-\.])+/, '').replace(/(\d+[\-\.])+/, '');
+
+	// 	// attempt to find pre-compiled partial
+	// 	var template = Handlebars.partials[key],
+	// 		fn;
+
+	// 	// compile partial if not already compiled
+	// 	if (!_.isFunction(template)) {
+	// 		fn = Handlebars.compile(template);
+	// 	} else {
+	// 		fn = template;
+	// 	}
+
+	// 	// return beautified html with trailing whitespace removed
+	// 	return beautifyHtml(fn(buildContext(context, opts.hash)).replace(/^\s+/, ''), options.beautifier);
+
+	// });
+
+	Twig.extendFunction('material', function (name) {
 		var key = name.replace(/(\d+[\-\.])+/, '').replace(/(\d+[\-\.])+/, '');
 
-		// attempt to find pre-compiled partial
-		var template = Handlebars.partials[key],
-			fn;
+		var html = Twig.twig({
+			id: 'layout',
+			ref: 'include',
+			allowInlineIncludes: true,
+			data: fs.readFileSync('views/layout.twig').toString()
+		}).render();
 
-		// compile partial if not already compiled
-		if (!_.isFunction(template)) {
-			fn = Handlebars.compile(template);
-		} else {
-			fn = template;
-		}
-
-		// return beautified html with trailing whitespace removed
-		return beautifyHtml(fn(buildContext(context, opts.hash)).replace(/^\s+/, ''), options.beautifier);
-
+		// console.log(key);
+		// process.exit();
 	});
 
 };
 
+/**
+ * Register new Twig functions
+ */
+var registerFunctions = function (functions) {
+
+	if (!functions) {
+		return;
+	}
+
+	for (var func in functions) {
+		if (functions.hasOwnProperty(func)) {
+			Twig.extendFunction(func, functions[func]);
+		}
+	}
+
+};
+
+/**
+ * Register new Twig filters
+ */
+var registerFilters = function (filters) {
+
+	if (!filters) {
+		return;
+	}
+
+	for (var filter in filters) {
+		if (filters.hasOwnProperty(filter)) {
+			Twig.extendFilter(filter, filters[filter]);
+		}
+	}
+
+};
 
 /**
  * Setup the assembly
@@ -633,48 +659,33 @@ var assemble = function () {
 			collection = (dirname !== options.keys.views) ? dirname : '',
 			filePath = path.normalize(path.join(options.dest, collection, path.basename(file)));
 
-		// get page gray matter and content
-		var pageMatter = getMatter(file),
-			pageContent = pageMatter.content;
-
-		if (collection) {
-			pageMatter.data.baseurl = '..';
-		}
-
 		// template using Handlebars
-		var source = wrapPage(pageContent, assembly.layouts[pageMatter.data.layout || options.layout]),
-			context = buildContext(pageMatter.data),
-			template = Handlebars.compile(source);
+		// @TODO: remove the line below
+		// var source = wrapPage(pageContent, assembly.layouts[pageMatter.data.layout || options.layout]),
 
-		// redefine file path if dest front-matter variable is defined
-		if (pageMatter.data.dest) {
-			filePath = path.normalize(pageMatter.data.dest);
-		}
+		// @TODO: instead of empty object, load pattern data
+		var context = buildContext({});
 
-    if (options.destMap[collection]) {
-			filePath = path.normalize(path.join(options.destMap[collection], path.basename(file)));
-    }
+		twig({
+			id: id,
+			path: file,
+			async: false,
+			load: function (template) {
+				// change extension to .html
+				filePath = filePath.replace(/\.[0-9a-z]+$/, options.extension);
 
-		// change extension to .html
-		filePath = filePath.replace(/\.[0-9a-z]+$/, options.extension);
+				// write file
+				mkdirp.sync(path.dirname(filePath));
+				try {
+					fs.writeFileSync(filePath, template.render(context));
+				} catch(e) {
+					const originFilePath = path.dirname(file) + '/' + path.basename(file);
 
-		// write file
-		mkdirp.sync(path.dirname(filePath));
-		try {
-			fs.writeFileSync(filePath, template(context));
-		} catch(e) {
-			const originFilePath = path.dirname(file) + '/' + path.basename(file);
-
-			console.error('\x1b[31m \x1b[1mBold', 'Error while comiling template', originFilePath, '\x1b[0m \n')
-			throw e;
-		}
-
-		// write a copy file if custom dest-copy front-matter variable is defined
-		if (pageMatter.data['dest-copy']) {
-			var copyPath = path.normalize(pageMatter.data['dest-copy']);
-			mkdirp.sync(path.dirname(copyPath));
-			fs.writeFileSync(copyPath, template(context));
-		}
+					console.error('\x1b[31m \x1b[1m', 'Error while comiling template', originFilePath, '\x1b[0m \n')
+					throw e;
+				}
+			}
+		});
 	});
 
 };

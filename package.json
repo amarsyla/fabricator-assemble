@@ -28,11 +28,11 @@
     "lodash": "^4.13.1",
     "markdown-it": "^7.0.0",
     "mkdirp": "^0.5.1",
-    "sort-object": "^3.0.2"
+    "sort-object": "^3.0.2",
+    "twig": "^1.11.0"
   },
   "devDependencies": {
     "del": "^2.2.1",
-    "helper-markdown": "^0.1.2",
     "html-minifier": "^2.1.7",
     "mocha": "^2.5.3"
   }

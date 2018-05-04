@@ -1,0 +1,45 @@
+<h1>{{ home.greeting }}, {{ name }}!</h1>
+
+<p>Lorem ipsum dolor sit amet, consectetur adipisicing elit. Veritatis numquam eaque ea enim tempore, quaerat, reprehenderit, ut eos incidunt impedit maiores quibusdam porro? Saepe, debitis tenetur voluptates necessitatibus, ipsa nesciunt.</p>
+
+{% include '../materials/01-components/button.twig' %}
+
+{% include '../materials/02-structures/02-form.twig' with { "form-desc": "A cool form." } %}
+
+{% for material in materials %}
+
+	<h1>{{ material.name }}</h1>
+
+	{% for key, item in material.items %}
+
+		<h2>{{ item.name }}</h2>
+
+		{% if item.notes %}
+			<div class="notes">
+				{{ item.notes | raw }}
+			</div>
+		{% endif %}
+
+		{% if item.items %}
+			{% for key, child in item.items %}
+				<h3>{{ child.name }}</h3>
+
+				{% if child.notes %}
+					<div class="notes">
+						{{ child.notes | raw }}
+					</div>
+				{% endif %}
+
+				<div class="item">
+					{{ material(key) | raw }}
+				</div>
+			{% endfor %}
+		{% else %}
+			<div class="item">
+				{{ material(key) | raw }}
+			</div>
+		{% endif %}
+
+	{% endfor %}
+
+{% endfor %}

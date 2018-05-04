@@ -1,0 +1,15 @@
+---
+title: Document Name
+---
+
+{% for doc in docs %}
+
+	<h1>{{ doc.name }}</h1>
+
+	{{ doc.content | raw }}
+
+{% endfor %}
+
+{% for i in range(0, 2) %}
+	{{ loop.index }}
+{% endfor %}
